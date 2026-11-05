@@ -1,0 +1,125 @@
+<!--
+  Bitwarden Rules for Wazuh
+  Place in: /var/ossec/etc/rules/0850-bitwarden_rules.xml (Manager)
+
+  Rule ID range: 100800–100899
+  Requires: 0850-bitwarden_decoders.xml
+-->
+
+<group name="bitwarden,">
+
+  <!-- Base rule: any Bitwarden Serilog log -->
+  <rule id="100800" level="0">
+    <decoded_as>bitwarden</decoded_as>
+    <description>Bitwarden: Serilog event</description>
+  </rule>
+
+  <!-- Suppress /alive healthcheck noise -->
+  <rule id="100801" level="0">
+    <if_sid>100800</if_sid>
+    <match>"/alive"</match>
+    <description>Bitwarden: Healthcheck (suppressed)</description>
+  </rule>
+
+  <!-- Suppress feature flag noise -->
+  <rule id="100802" level="0">
+    <if_sid>100800</if_sid>
+    <match>Unknown feature flag</match>
+    <description>Bitwarden: Unknown feature flag (suppressed)</description>
+  </rule>
+
+  <!-- INFO level events -->
+  <rule id="100810" level="3">
+    <if_sid>100800</if_sid>
+    <field name="log_level">INF</field>
+    <description>Bitwarden: Info - $(message)</description>
+  </rule>
+
+  <!-- WARNING level events -->
+  <rule id="100820" level="7">
+    <if_sid>100800</if_sid>
+    <field name="log_level">WRN</field>
+    <description>Bitwarden: Warning - $(message)</description>
+  </rule>
+
+  <!-- ERROR level events -->
+  <rule id="100830" level="10">
+    <if_sid>100800</if_sid>
+    <field name="log_level">ERR</field>
+    <description>Bitwarden: Error - $(message)</description>
+  </rule>
+
+  <!-- FATAL level events -->
+  <rule id="100835" level="13">
+    <if_sid>100800</if_sid>
+    <field name="log_level">FTL</field>
+    <description>Bitwarden: Fatal error - $(message)</description>
+  </rule>
+
+  <!-- Application shutdown (WRN level) -->
+  <rule id="100840" level="7">
+    <if_sid>100820</if_sid>
+    <match>Application is shutting down</match>
+    <description>Bitwarden: Application shutting down</description>
+  </rule>
+
+  <!-- Application started (INF level) -->
+  <rule id="100841" level="3">
+    <if_sid>100810</if_sid>
+    <match>Application started</match>
+    <description>Bitwarden: Application started</description>
+  </rule>
+
+  <!-- LaunchDarkly SDK key invalid (ERR level) -->
+  <rule id="100842" level="7">
+    <if_sid>100830</if_sid>
+    <match>The SDK key provided is invalid</match>
+    <description>Bitwarden: LaunchDarkly SDK key invalid</description>
+  </rule>
+
+  <!-- Failed login: Invalid password (WRN level) -->
+  <rule id="100850" level="9">
+    <if_sid>100820</if_sid>
+    <match>Invalid password|Failed login attempt</match>
+    <description>Bitwarden: Failed login attempt</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <!-- Failed login: authentication failed (INF level) -->
+  <rule id="100852" level="9">
+    <if_sid>100810</if_sid>
+    <match>invalid_username_or_password</match>
+    <description>Bitwarden: Failed login - invalid username or password</description>
+    <group>authentication_failed,</group>
+  </rule>
+
+  <!-- Brute force: 5 failed logins in 120s -->
+  <rule id="100851" level="12" frequency="5" timeframe="120">
+    <if_matched_sid>100850</if_matched_sid>
+    <description>Bitwarden: Multiple failed login attempts (brute force)</description>
+    <group>authentication_failures,</group>
+  </rule>
+
+  <!-- User created/invited (INF level) -->
+  <rule id="100860" level="5">
+    <if_sid>100810</if_sid>
+    <match>User created|Invited user|User registered</match>
+    <description>Bitwarden: User account change</description>
+    <group>account_changed,</group>
+  </rule>
+
+  <!-- Database/MSSQL errors (ERR level) -->
+  <rule id="100870" level="10">
+    <if_sid>100830</if_sid>
+    <match>SqlException|database error|connection refused|timeout expired</match>
+    <description>Bitwarden: Database error</description>
+  </rule>
+
+  <!-- Data protection warning (WRN level) -->
+  <rule id="100880" level="5">
+    <if_sid>100820</if_sid>
+    <match>Protected data will be unavailable</match>
+    <description>Bitwarden: Data protection keys not persisted</description>
+  </rule>
+
+</group>

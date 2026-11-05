@@ -1,0 +1,83 @@
+{
+   "name": "Bitwarden Failed Logins",
+   "type": "monitor",
+   "monitor_type": "query_level_monitor",
+   "enabled": true,
+   "schedule": {
+      "period": {
+         "interval": 5,
+         "unit": "MINUTES"
+      }
+   },
+   "inputs": [
+      {
+         "search": {
+            "indices": [
+               "wazuh-alerts-*"
+            ],
+            "query": {
+               "size": 10,
+               "query": {
+                  "bool": {
+                     "filter": [
+                        {
+                           "range": {
+                              "@timestamp": {
+                                 "from": "{{period_end}}||-5m",
+                                 "to": "{{period_end}}",
+                                 "include_lower": true,
+                                 "include_upper": true,
+                                 "format": "epoch_millis",
+                                 "boost": 1
+                              }
+                           }
+                        },
+                        {
+                           "terms": {
+                              "rule.id": [
+                                 "100850",
+                                 "100851",
+                                 "100852"
+                              ],
+                              "boost": 1
+                           }
+                        }
+                     ],
+                     "adjust_pure_negative": true,
+                     "boost": 1
+                  }
+               }
+            }
+         }
+      }
+   ],
+   "triggers": [
+      {
+         "query_level_trigger": {
+            "name": "Bitwarden Failed Login Trigger",
+            "severity": "2",
+            "condition": {
+               "script": {
+                  "source": "ctx.results[0].hits.total.value > 0",
+                  "lang": "painless"
+               }
+            },
+            "actions": [
+               {
+                  "name": "Teams Notification",
+                  "destination_id": "<YOUR_TEAMS_DESTINATION_ID>",
+                  "message_template": {
+                     "source": "{\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"summary\": \"Bitwarden Failed Logins\",\n  \"themeColor\": \"FF0000\",\n  \"title\": \"🔐 Bitwarden: {{ctx.results.0.hits.total.value}} fehlgeschlagene Anmeldung(en)\",\n  \"sections\": [{{#ctx.results.0.hits.hits}}{\"activityTitle\": \"{{_source.rule.description}}\", \"facts\": [{\"name\": \"Benutzer\", \"value\": \"{{_source.data.dstuser}}\"}, {\"name\": \"Quell-IP\", \"value\": \"{{_source.data.srcip}}\"}, {\"name\": \"Zeit\", \"value\": \"{{_source.timestamp}}\"}, {\"name\": \"Server\", \"value\": \"{{_source.agent.name}}\"}], \"markdown\": true},{{/ctx.results.0.hits.hits}}],\n  \"potentialAction\": [{\"@type\": \"OpenUri\", \"name\": \"🔗 Im Dashboard öffnen\", \"targets\": [{\"os\": \"default\", \"uri\": \"https://<YOUR_WAZUH_DASHBOARD>/app/discover#/?_a=(filters:!((query:(match_phrase:(rule.groups:'authentication_failed')))),index:'wazuh-alerts-*')\"}]}]\n}",
+                     "lang": "mustache"
+                  },
+                  "throttle_enabled": false,
+                  "subject_template": {
+                     "source": "Bitwarden Failed Login Alert",
+                     "lang": "mustache"
+                  }
+               }
+            ]
+         }
+      }
+   ]
+}

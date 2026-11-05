@@ -1,0 +1,55 @@
+<!--
+  Bitwarden Decoders for Wazuh
+  Place in: /var/ossec/etc/decoders/0850-bitwarden_decoders.xml (Manager)
+
+  Decodes Bitwarden Serilog log format:
+    YYYY-MM-DDThh:mm:ss.nnnnnnn+00:00 [RequestID] [LEVEL] message (event_id)
+
+  Two parent decoders handle both log variants:
+    1. Logs with request ID (pre-decoder parses 0HN... as program_name)
+    2. Logs without request ID
+
+  Child decoders extract additional fields from failed login events.
+  IMPORTANT: Child decoders MUST have <prematch> filters. Without prematch,
+  Wazuh commits to the first child whose regex beginning matches, even if the
+  full pattern fails — subsequent children are then skipped silently.
+-->
+
+<!-- Parent: Logs with request ID (pre-decoder parses 0HN... as program_name) -->
+<decoder name="bitwarden">
+  <program_name>^0HN</program_name>
+  <regex type="pcre2">\[(\w+)\]\s+(.*)</regex>
+  <order>log_level,message</order>
+</decoder>
+
+<!-- Parent: Logs without request ID -->
+<decoder name="bitwarden">
+  <prematch>\p\w\w\w\p </prematch>
+  <regex type="pcre2">\[(\w+)\]\s+(.*)</regex>
+  <order>log_level,message</order>
+</decoder>
+
+<!-- Child: extract source IP from WRN failed login lines -->
+<!-- Example: [WRN] Failed login attempt. Is2FARequest: False IpAddress: "10.1.2.3" -->
+<decoder name="bitwarden-failed-login-ip">
+  <parent>bitwarden</parent>
+  <prematch type="pcre2">IpAddress:</prematch>
+  <regex type="pcre2">\[(\w+)\]\s+(.*IpAddress:\s*"(\d+\.\d+\.\d+\.\d+)".*)</regex>
+  <order>log_level,message,srcip</order>
+</decoder>
+
+<!-- Child: extract username from INF failed login lines -->
+<!-- Example: [INF] "User authentication failed: ": "invalid_username_or_password", ...UserName: "user@example.com"... -->
+<decoder name="bitwarden-failed-login-user">
+  <parent>bitwarden</parent>
+  <prematch type="pcre2">UserName:</prematch>
+  <regex type="pcre2">\[(\w+)\]\s+(.*UserName:\s*"([^"]+)".*)</regex>
+  <order>log_level,message,dstuser</order>
+</decoder>
+
+<!-- Child: fallback for all other lines — extracts log_level and message -->
+<decoder name="bitwarden-base">
+  <parent>bitwarden</parent>
+  <regex type="pcre2">\[(\w+)\]\s+(.*)</regex>
+  <order>log_level,message</order>
+</decoder>
